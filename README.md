@@ -27,13 +27,18 @@ Hover an icon to see the monitor's name.
 - Left-click a display's icon to toggle HDR on that display.
 - Right-click any icon, then click a display in the menu to toggle it.
 - The menu also has *HDR on for all unlocked displays* and *HDR off for all displays*.
+- **Alt+B** toggles HDR on all your *unlocked* displays. It's Nitpick's own
+  shortcut, so Windows ignores it and locked displays are never touched.
+  While Nitpick runs, other apps won't receive Alt+B (some use it for menus);
+  untick it in the menu if that gets in the way.
 
 **Locking HDR off**
 - Right-click, then tick **Lock HDR off** under a display.
 - While a lock is active:
-  - **Win+Alt+B** is intercepted before Windows sees it. It still toggles HDR
-    on your *unlocked* displays, so the shortcut keeps working without touching
-    the locked one.
+  - **Win+Alt+B** still toggles HDR on your *unlocked* displays. Windows'
+    own handler (Xbox Game Bar) can't be fully blocked, though, so when you turn
+    HDR **on** this way, a locked display may flicker briefly before Nitpick
+    switches it back off. Use **Alt+B** instead to avoid that.
   - Anything else that turns HDR on for that display (the Settings toggle, a
     game, another tool) is switched back off right away. The app watches for
     display changes and re-checks every second.
@@ -63,12 +68,10 @@ Hover an icon to see the monitor's name.
 
 ## Limitations
 
-- The lock is enforced by this app, not by the monitor or driver. If something
-  other than Win+Alt+B turns HDR on, the display may flicker into HDR for up to
-  a second before it's switched back. The same happens if you press Win+Alt+B
-  while an *administrator* window has focus, because Windows doesn't send keys
-  from elevated windows to normal apps. If the app isn't running, nothing is
-  locked.
+- The lock is enforced by this app, not by the monitor or driver. If anything
+  turns HDR on for a locked display (Win+Alt+B, the Settings toggle, a game), it
+  may flicker into HDR for up to a second before it's switched back. Alt+B
+  never does this. If the app isn't running, nothing is locked.
 - A truly permanent, driver-level block would mean removing the HDR data block
   from the monitor's EDID (for example with CRU). This app deliberately doesn't
   edit the registry or drivers that way.

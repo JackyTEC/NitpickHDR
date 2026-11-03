@@ -24,5 +24,6 @@ void SetAutostartEnabled(bool enabled);
 
 inline constexpr wchar_t kHotkeyRespectsLocks[] = L"WinAltBRespectsLocks";
 inline constexpr wchar_t kShowUnsupported[] = L"ShowNonHdrDisplays";
+inline constexpr wchar_t kOwnHotkey[] = L"AltBHotkey";
 
 } // namespace settings

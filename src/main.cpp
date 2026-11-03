@@ -55,6 +55,7 @@ enum : UINT {
     IDM_ALL_OFF,
     IDM_IDENTIFY,
     IDM_OPT_HOTKEY,
+    IDM_OPT_OWN_HOTKEY,
     IDM_OPT_SHOW_UNSUPPORTED,
     IDM_OPT_AUTOSTART,
     IDM_OPEN_SETTINGS,
@@ -523,6 +524,45 @@ void HandleWinAltB()
     ScheduleRecheck();
 }
 
+// Nitpick's own shortcut (Alt+B). Windows doesn't listen to it, so unlike
+// Win+Alt+B it never touches locked displays: no flicker, and no waiting for
+// Windows. Same "all displays" behaviour as Win+Alt+B, minus locked ones.
+constexpr int kOwnHotkeyId = 1;
+bool g_ownHotkeyRegistered = false;
+bool g_ownHotkeyWarned = false;
+
+void UpdateOwnHotkey()
+{
+    const bool want = settings::GetBool(settings::kOwnHotkey, true);
+    if (want && !g_ownHotkeyRegistered) {
+        g_ownHotkeyRegistered = RegisterHotKey(g_window, kOwnHotkeyId, MOD_ALT | MOD_NOREPEAT, 'B') != FALSE;
+        if (!g_ownHotkeyRegistered && !g_ownHotkeyWarned) {
+            g_ownHotkeyWarned = true;
+            ShowBalloon(L"Alt+B unavailable", L"Another app is already using Alt+B.", NIIF_WARNING);
+        }
+    } else if (!want && g_ownHotkeyRegistered) {
+        UnregisterHotKey(g_window, kOwnHotkeyId);
+        g_ownHotkeyRegistered = false;
+    }
+}
+
+void HandleOwnHotkey()
+{
+    Refresh();
+    bool anyOn = false, anyUnlocked = false;
+    for (const auto& d : g_displays) {
+        if (d.status == hdr::Status::Unsupported || IsLocked(d))
+            continue;
+        anyUnlocked = true;
+        anyOn |= d.status == hdr::Status::On;
+    }
+    if (!anyUnlocked) {
+        ShowBalloon(L"Nothing to switch", L"HDR is locked off on every HDR-capable display.");
+        return;
+    }
+    SetAllUnlocked(!anyOn);
+}
+
 void SetLock(const std::wstring& key, bool locked)
 {
     settings::SetLocked(key, locked);
@@ -686,6 +726,8 @@ void ShowContextMenu(POINT pt, UINT clickedUid)
     AppendItem(menu, IDM_ALL_OFF, L"HDR off for all displays");
     AppendItem(menu, IDM_IDENTIFY, L"Identify displays");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendItem(menu, IDM_OPT_OWN_HOTKEY, L"Alt+B toggles HDR (skips locked, no flicker)",
+               settings::GetBool(settings::kOwnHotkey, true));
     AppendItem(menu, IDM_OPT_HOTKEY, L"Win+Alt+B skips locked displays",
                settings::GetBool(settings::kHotkeyRespectsLocks, true));
     AppendItem(menu, IDM_OPT_SHOW_UNSUPPORTED, L"Show icons for non-HDR displays",
@@ -717,6 +759,11 @@ void ShowContextMenu(POINT pt, UINT clickedUid)
         case IDM_ALL_ON: SetAllUnlocked(true); break;
         case IDM_ALL_OFF: SetAllUnlocked(false); break;
         case IDM_IDENTIFY: IdentifyDisplays(); break;
+        case IDM_OPT_OWN_HOTKEY:
+            settings::SetBool(settings::kOwnHotkey, !settings::GetBool(settings::kOwnHotkey, true));
+            g_ownHotkeyWarned = false;
+            UpdateOwnHotkey();
+            break;
         case IDM_OPT_HOTKEY:
             settings::SetBool(settings::kHotkeyRespectsLocks, !settings::GetBool(settings::kHotkeyRespectsLocks, true));
             UpdateHookAndTimer();
@@ -775,10 +822,16 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         Refresh();
         if (g_tray.empty() || !g_tray.front().added)
             SetTimer(hwnd, TIMER_WAIT_TASKBAR, 30000, nullptr);
+        UpdateOwnHotkey();
         return 0;
 
     case WM_TRAY:
         OnTrayMessage(wParam, lParam);
+        return 0;
+
+    case WM_HOTKEY:
+        if (wParam == kOwnHotkeyId)
+            HandleOwnHotkey();
         return 0;
 
     case WM_WIN_ALT_B:
@@ -820,6 +873,8 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
 
     case WM_DESTROY:
+        if (g_ownHotkeyRegistered)
+            UnregisterHotKey(hwnd, kOwnHotkeyId);
         keyhook::Uninstall();
         for (auto& e : g_tray)
             DestroyEntry(e);
