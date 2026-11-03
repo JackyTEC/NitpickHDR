@@ -84,6 +84,17 @@ int g_recheckCount = 0;
 UINT g_pollInterval = 0;
 DWORD g_ignoreClicksBefore = 0;
 std::map<std::wstring, DWORD> g_lastEnforce;
+
+// Win+Alt+B result we're holding for a few seconds. Windows may also react to
+// the shortcut (we can't always stop it), so instead of toggling relative to
+// the *current* state, we pick a target from the state before the press and
+// keep re-applying it until things settle.
+bool g_hotkeyActive = false;
+bool g_hotkeyTarget = false;
+DWORD g_hotkeyUntil = 0;
+std::map<std::wstring, DWORD> g_lastHotkeyFix;
+constexpr DWORD kHotkeySettleMs = 5000;
+constexpr DWORD kHotkeyRetryMs = 1200;
 std::map<std::wstring, bool> g_enforceWarned;
 
 // --------------------------------------------------------------------------
@@ -380,6 +391,25 @@ bool EnforceLocks()
                         NIIF_WARNING, d.number);
         }
     }
+
+    if (g_hotkeyActive && static_cast<LONG>(g_hotkeyUntil - now) <= 0)
+        g_hotkeyActive = false;
+    if (g_hotkeyActive) {
+        for (const auto& d : g_displays) {
+            if (d.status == hdr::Status::Unsupported || IsLocked(d))
+                continue;
+            if ((d.status == hdr::Status::On) == g_hotkeyTarget)
+                continue;
+            const auto key = d.Key();
+            auto last = g_lastHotkeyFix.find(key);
+            if (last != g_lastHotkeyFix.end() && now - last->second < kHotkeyRetryMs)
+                continue;
+            g_lastHotkeyFix[key] = now;
+            SetHdrKeepCursor(d, g_hotkeyTarget);
+            acted = true;
+        }
+    }
+
     if (acted)
         hdr::RefreshCalibration();
     return acted;
@@ -406,6 +436,7 @@ void ScheduleRecheck()
 
 void ToggleDisplay(const std::wstring& key)
 {
+    g_hotkeyActive = false; // a manual choice overrides a pending Win+Alt+B
     Refresh();
     hdr::Display* d = FindByKey(key);
     if (!d)
@@ -432,6 +463,7 @@ void ToggleDisplay(const std::wstring& key)
 
 void SetAllUnlocked(bool enable)
 {
+    g_hotkeyActive = false;
     Refresh();
     bool any = false;
     for (const auto& d : g_displays) {
@@ -451,7 +483,12 @@ void SetAllUnlocked(bool enable)
 // Replacement for Windows' Win+Alt+B: same "all displays" behaviour, minus locked ones.
 void HandleWinAltB()
 {
-    Refresh();
+    // Decide from the state *before* the key press. g_displays is kept current by
+    // WM_DISPLAYCHANGE and polling; re-querying now could already see Windows'
+    // own reaction to the shortcut and flip the decision.
+    if (g_displays.empty())
+        g_displays = hdr::GetDisplays();
+
     bool anyOn = false, anyUnlocked = false;
     for (const auto& d : g_displays) {
         if (d.status == hdr::Status::Unsupported || IsLocked(d))
@@ -461,9 +498,25 @@ void HandleWinAltB()
     }
     if (!anyUnlocked) {
         ShowBalloon(L"Win+Alt+B blocked", L"HDR is locked off on every HDR-capable display.");
+        Refresh(); // undo anything Windows did
         return;
     }
-    SetAllUnlocked(!anyOn);
+
+    g_hotkeyTarget = !anyOn;
+    g_hotkeyActive = true;
+    g_hotkeyUntil = GetTickCount() + kHotkeySettleMs;
+    g_lastHotkeyFix.clear();
+
+    const DWORD now = GetTickCount();
+    for (const auto& d : g_displays) {
+        if (d.status == hdr::Status::Unsupported || IsLocked(d))
+            continue;
+        g_lastHotkeyFix[d.Key()] = now;
+        SetHdrKeepCursor(d, g_hotkeyTarget); // explicit target, not a toggle
+    }
+    hdr::RefreshCalibration();
+    Refresh();
+    ScheduleRecheck();
 }
 
 void SetLock(const std::wstring& key, bool locked)
