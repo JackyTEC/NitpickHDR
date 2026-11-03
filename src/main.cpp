@@ -40,7 +40,7 @@ constexpr wchar_t kMutexName[] = L"Local\\NitpickHDR-SingleInstance";
 constexpr UINT WM_TRAY = WM_APP + 1;
 constexpr UINT WM_WIN_ALT_B = WM_APP + 2;
 
-enum : UINT_PTR { TIMER_POLL = 1, TIMER_RECHECK = 2, TIMER_WAIT_TASKBAR = 3 };
+enum : UINT_PTR { TIMER_POLL = 1, TIMER_RECHECK = 2, TIMER_WAIT_TASKBAR = 3, TIMER_HOTKEY_GRACE = 4 };
 
 constexpr UINT kPollWithLocksMs = 1000;
 constexpr UINT kPollIdleMs = 4000;
@@ -85,15 +85,19 @@ UINT g_pollInterval = 0;
 DWORD g_ignoreClicksBefore = 0;
 std::map<std::wstring, DWORD> g_lastEnforce;
 
-// Win+Alt+B result we're holding for a few seconds. Windows may also react to
-// the shortcut (we can't always stop it), so instead of toggling relative to
-// the *current* state, we pick a target from the state before the press and
-// keep re-applying it until things settle.
+// Win+Alt+B handling. Windows (Xbox Game Bar) may react to the shortcut even
+// though the hook swallows it. Switching HDR is slow (~1 s per change), so we
+// don't switch alongside Windows. Instead we pick the intended result from the
+// state *before* the press, let Windows do the work, keep locked displays off,
+// and only switch unlocked displays ourselves if, after a grace period, they
+// still aren't where they should be (Windows didn't react, or did the wrong thing).
 bool g_hotkeyActive = false;
 bool g_hotkeyTarget = false;
+DWORD g_hotkeyGraceUntil = 0;
 DWORD g_hotkeyUntil = 0;
 std::map<std::wstring, DWORD> g_lastHotkeyFix;
-constexpr DWORD kHotkeySettleMs = 5000;
+constexpr DWORD kHotkeyGraceMs = 1500;
+constexpr DWORD kHotkeySettleMs = 6000;
 constexpr DWORD kHotkeyRetryMs = 1200;
 std::map<std::wstring, bool> g_enforceWarned;
 
@@ -394,7 +398,8 @@ bool EnforceLocks()
 
     if (g_hotkeyActive && static_cast<LONG>(g_hotkeyUntil - now) <= 0)
         g_hotkeyActive = false;
-    if (g_hotkeyActive) {
+    // Unlocked displays: only step in once Windows has had its chance.
+    if (g_hotkeyActive && static_cast<LONG>(now - g_hotkeyGraceUntil) >= 0) {
         for (const auto& d : g_displays) {
             if (d.status == hdr::Status::Unsupported || IsLocked(d))
                 continue;
@@ -437,6 +442,7 @@ void ScheduleRecheck()
 void ToggleDisplay(const std::wstring& key)
 {
     g_hotkeyActive = false; // a manual choice overrides a pending Win+Alt+B
+    KillTimer(g_window, TIMER_HOTKEY_GRACE);
     Refresh();
     hdr::Display* d = FindByKey(key);
     if (!d)
@@ -464,6 +470,7 @@ void ToggleDisplay(const std::wstring& key)
 void SetAllUnlocked(bool enable)
 {
     g_hotkeyActive = false;
+    KillTimer(g_window, TIMER_HOTKEY_GRACE);
     Refresh();
     bool any = false;
     for (const auto& d : g_displays) {
@@ -502,20 +509,17 @@ void HandleWinAltB()
         return;
     }
 
+    const DWORD now = GetTickCount();
     g_hotkeyTarget = !anyOn;
     g_hotkeyActive = true;
-    g_hotkeyUntil = GetTickCount() + kHotkeySettleMs;
+    g_hotkeyGraceUntil = now + kHotkeyGraceMs;
+    g_hotkeyUntil = now + kHotkeySettleMs;
     g_lastHotkeyFix.clear();
 
-    const DWORD now = GetTickCount();
-    for (const auto& d : g_displays) {
-        if (d.status == hdr::Status::Unsupported || IsLocked(d))
-            continue;
-        g_lastHotkeyFix[d.Key()] = now;
-        SetHdrKeepCursor(d, g_hotkeyTarget); // explicit target, not a toggle
-    }
-    hdr::RefreshCalibration();
-    Refresh();
+    // Nothing is switched here: Windows is (usually) already doing it. Locked
+    // displays are kept off by the normal enforcement as soon as anything changes,
+    // and the grace timer switches unlocked displays only if Windows didn't.
+    SetTimer(g_window, TIMER_HOTKEY_GRACE, kHotkeyGraceMs, nullptr);
     ScheduleRecheck();
 }
 
@@ -802,6 +806,10 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 Refresh();
             else
                 KillTimer(hwnd, TIMER_RECHECK);
+            break;
+        case TIMER_HOTKEY_GRACE:
+            KillTimer(hwnd, TIMER_HOTKEY_GRACE);
+            Refresh(); // switches unlocked displays now if Windows didn't
             break;
         case TIMER_WAIT_TASKBAR:
             KillTimer(hwnd, TIMER_WAIT_TASKBAR);
