@@ -31,7 +31,7 @@ jobs:
           echo "Building version $VERSION"
 
       - name: Configure
-        run: cmake -B build -A x64 -DNITPICK_VERSION=${{ steps.ver.outputs.version }}
+        run: cmake -B build -A x64 "-DNITPICK_VERSION=${{ steps.ver.outputs.version }}"
 
       - name: Build
         run: cmake --build build --config Release
