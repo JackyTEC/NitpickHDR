@@ -5,13 +5,13 @@
 APIs, autostart) with [HDRToggler](https://github.com/GiulioSamp/HDRToggler)
 (per-monitor toggling) and adds a per-monitor **HDR lock**.
 
-Native C++/Win32: one ~1 MB `.exe`, no .NET runtime, no installer.
+Built with native C++/Win32.
 
 ![Tray icons: HDR on, SDR, locked, no HDR support](docs/icon-preview.png)
 
 ## What it does
 
-**One tray icon per display**, each showing that display's own state:
+One tray icon per display, each showing that display's own state:
 
 | Icon | Meaning |
 |---|---|
@@ -20,16 +20,16 @@ Native C++/Win32: one ~1 MB `.exe`, no .NET runtime, no installer.
 | Red badge, **SDR** | HDR is **locked off** |
 | Faded badge, **SDR** | This display can't do HDR |
 
-The number under the label is the display number, counted left to right.
+The number under the label is the display number, displays counted left to right.
 Hover an icon to see the monitor's name.
 
-**Toggling (1–2 clicks)**
-- Left-click a display's icon to toggle HDR on that display. That's 1 click.
-- Right-click any icon, then click a display in the menu to toggle it. That's 2 clicks.
+**Toggling**
+- Left-click a display's icon to toggle HDR on that display.
+- Right-click any icon, then click a display in the menu to toggle it.
 - The menu also has *HDR on for all unlocked displays* and *HDR off for all displays*.
 
 **Locking HDR off**
-- Right-click, then tick **Lock HDR off** under a display. That's 2 clicks.
+- Right-click, then tick **Lock HDR off** under a display.
 - While a lock is active:
   - **Win+Alt+B** is intercepted before Windows sees it. It still toggles HDR
     on your *unlocked* displays, so the shortcut keeps working without touching
@@ -40,8 +40,7 @@ Hover an icon to see the monitor's name.
 - Locks are saved per physical monitor and survive reboots.
 
 **Hiding tray icons**
-- Right-click, then tick **Hide tray icon** under a display. That's 2 clicks.
-  Untick it to bring the icon back.
+- Right-click, then tick **Hide tray icon** under a display. Untick it to bring the icon back.
 - Hidden displays still appear in the menu, so you can toggle and lock them as normal.
 - If every display's icon is hidden, Nitpick shows one summary icon so the menu
   stays reachable. It turns gold if any display has HDR on, and hovering it shows
@@ -120,13 +119,13 @@ Developer aid: `NitpickHDR.exe --dump-icons C:\some\folder` writes every icon va
 
 ## Settings storage
 
-- `HKCU\Software\NitpickHDR`: options
-- `HKCU\Software\NitpickHDR\LockedDisplays`: locked monitors, keyed by device path
-- `HKCU\Software\NitpickHDR\HiddenIcons`: monitors whose tray icon is hidden
-- `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\NitpickHDR`: autostart
+- `HKEY_CURRENT_USER\Software\NitpickHDR`: options
+- `HKEY_CURRENT_USER\Software\NitpickHDR\LockedDisplays`: locked monitors, keyed by device path
+- `HKEY_CURRENT_USER\Software\NitpickHDR\HiddenIcons`: monitors whose tray icon is hidden
+- `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run\NitpickHDR`: autostart
 
 To remove everything, untick *Start with Windows*, exit the app, then delete
-`HKCU\Software\NitpickHDR`.
+`HKEY_CURRENT_USER\Software\NitpickHDR`.
 
 ## Credits and license
 
