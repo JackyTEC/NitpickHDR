@@ -50,6 +50,7 @@ constexpr DWORD kEnforceRetryMs = 2500;
 enum : UINT {
     IDM_DISPLAY_TOGGLE = 1000, // + index
     IDM_DISPLAY_LOCK = 2000,   // + index
+    IDM_DISPLAY_HIDE = 2500,   // + index
     IDM_ALL_ON = 3000,
     IDM_ALL_OFF,
     IDM_IDENTIFY,
@@ -261,10 +262,29 @@ void SyncTray()
     for (const auto& d : g_displays) {
         if (!showUnsupported && d.status == hdr::Status::Unsupported)
             continue;
+        if (settings::IsIconHidden(d.Key()))
+            continue;
         want.push_back({ static_cast<UINT>(d.number), StateFor(d), d.number, TooltipFor(d) });
     }
-    if (want.empty()) // keep something in the tray so the menu stays reachable
-        want.push_back({ kFallbackIconUid, icons::State::Unsupported, 0, L"Nitpick\nNo HDR-capable displays found" });
+    if (want.empty()) {
+        // Every display icon is hidden (or there are none): keep one summary icon
+        // in the tray so the menu stays reachable. It shows HDR if any display has it on.
+        icons::State state = icons::State::Unsupported;
+        std::wstring summary;
+        for (const auto& d : g_displays) {
+            if (d.status == hdr::Status::On)
+                state = icons::State::On;
+            else if (d.status == hdr::Status::Off && state == icons::State::Unsupported)
+                state = icons::State::Off;
+            if (!summary.empty())
+                summary += L"   ";
+            summary += std::to_wstring(d.number) + L": "
+                       + (StateFor(d) == icons::State::On ? L"HDR" : StateFor(d) == icons::State::Locked ? L"SDR (locked)" : L"SDR");
+        }
+        std::wstring tip = g_displays.empty() ? L"Nitpick\nNo displays found"
+                                              : L"Nitpick \u2014 right-click for menu\n" + summary;
+        want.push_back({ kFallbackIconUid, state, 0, Truncate(tip, 120) });
+    }
 
     // Remove icons that are no longer wanted
     for (auto it = g_tray.begin(); it != g_tray.end();) {
@@ -598,6 +618,8 @@ void ShowContextMenu(POINT pt, UINT clickedUid)
         if (supported)
             AppendItem(menu, IDM_DISPLAY_LOCK + static_cast<UINT>(i), L"      Lock HDR off (block Win+Alt+B etc.)",
                        locked);
+        AppendItem(menu, IDM_DISPLAY_HIDE + static_cast<UINT>(i), L"      Hide tray icon",
+                   settings::IsIconHidden(d.Key()));
     }
     if (g_displays.empty())
         AppendItem(menu, 0, L"No displays found", false, false);
@@ -626,6 +648,10 @@ void ShowContextMenu(POINT pt, UINT clickedUid)
 
     if (cmd >= IDM_DISPLAY_TOGGLE && cmd < IDM_DISPLAY_TOGGLE + keys.size()) {
         ToggleDisplay(keys[cmd - IDM_DISPLAY_TOGGLE]);
+    } else if (cmd >= IDM_DISPLAY_HIDE && cmd < IDM_DISPLAY_HIDE + keys.size()) {
+        const auto& key = keys[cmd - IDM_DISPLAY_HIDE];
+        settings::SetIconHidden(key, !settings::IsIconHidden(key));
+        SyncTray();
     } else if (cmd >= IDM_DISPLAY_LOCK && cmd < IDM_DISPLAY_LOCK + keys.size()) {
         const auto& key = keys[cmd - IDM_DISPLAY_LOCK];
         SetLock(key, !settings::IsLocked(key));

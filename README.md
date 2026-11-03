@@ -39,6 +39,14 @@ Hover an icon to see the monitor's name.
     display changes and re-checks every second.
 - Locks are saved per physical monitor and survive reboots.
 
+**Hiding tray icons**
+- Right-click, then tick **Hide tray icon** under a display. That's 2 clicks.
+  Untick it to bring the icon back.
+- Hidden displays still appear in the menu, so you can toggle and lock them as normal.
+- If every display's icon is hidden, Nitpick shows one summary icon so the menu
+  stays reachable. It turns gold if any display has HDR on, and hovering it shows
+  every display's status.
+
 **Other**
 - *Identify displays* briefly shows a big number plus the HDR status on each screen.
 - *Start with Windows* (needed for locks to be enforced after you log in).
@@ -114,6 +122,7 @@ Developer aid: `NitpickHDR.exe --dump-icons C:\some\folder` writes every icon va
 
 - `HKCU\Software\NitpickHDR`: options
 - `HKCU\Software\NitpickHDR\LockedDisplays`: locked monitors, keyed by device path
+- `HKCU\Software\NitpickHDR\HiddenIcons`: monitors whose tray icon is hidden
 - `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\NitpickHDR`: autostart
 
 To remove everything, untick *Start with Windows*, exit the app, then delete

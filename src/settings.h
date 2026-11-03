@@ -14,6 +14,10 @@ void SetBool(const wchar_t* name, bool value);
 bool IsLocked(const std::wstring& displayKey);
 void SetLocked(const std::wstring& displayKey, bool locked);
 
+// Per-display "hide tray icon" flags, keyed the same way
+bool IsIconHidden(const std::wstring& displayKey);
+void SetIconHidden(const std::wstring& displayKey, bool hidden);
+
 // HKCU\...\Run autostart entry
 bool IsAutostartEnabled();
 void SetAutostartEnabled(bool enabled);

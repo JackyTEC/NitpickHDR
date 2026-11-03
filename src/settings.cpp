@@ -14,6 +14,7 @@ namespace settings {
 namespace {
 constexpr wchar_t kRootKey[] = L"Software\\NitpickHDR";
 constexpr wchar_t kLocksKey[] = L"Software\\NitpickHDR\\LockedDisplays";
+constexpr wchar_t kHiddenKey[] = L"Software\\NitpickHDR\\HiddenIcons";
 constexpr wchar_t kRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 constexpr wchar_t kRunValue[] = L"NitpickHDR";
 
@@ -47,19 +48,27 @@ void SetBool(const wchar_t* name, bool value)
     WriteDword(kRootKey, name, value ? 1 : 0);
 }
 
-bool IsLocked(const std::wstring& displayKey)
+namespace {
+bool GetFlag(const wchar_t* key, const std::wstring& name)
 {
     DWORD v = 0;
-    return ReadDword(kLocksKey, displayKey.c_str(), v) && v != 0;
+    return ReadDword(key, name.c_str(), v) && v != 0;
 }
 
-void SetLocked(const std::wstring& displayKey, bool locked)
+void SetFlag(const wchar_t* key, const std::wstring& name, bool value)
 {
-    if (locked)
-        WriteDword(kLocksKey, displayKey.c_str(), 1);
+    if (value)
+        WriteDword(key, name.c_str(), 1);
     else
-        RegDeleteKeyValueW(HKEY_CURRENT_USER, kLocksKey, displayKey.c_str());
+        RegDeleteKeyValueW(HKEY_CURRENT_USER, key, name.c_str());
 }
+} // namespace
+
+bool IsLocked(const std::wstring& displayKey) { return GetFlag(kLocksKey, displayKey); }
+void SetLocked(const std::wstring& displayKey, bool locked) { SetFlag(kLocksKey, displayKey, locked); }
+
+bool IsIconHidden(const std::wstring& displayKey) { return GetFlag(kHiddenKey, displayKey); }
+void SetIconHidden(const std::wstring& displayKey, bool hidden) { SetFlag(kHiddenKey, displayKey, hidden); }
 
 bool IsAutostartEnabled()
 {
